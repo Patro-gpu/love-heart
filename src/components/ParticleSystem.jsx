@@ -36,9 +36,13 @@ export default function ParticleSystem({ gestureData }) {
   const burstPhase = useRef(0) // 0=idle, >0=bursting
 
   const { restPositions, explodeOffsets, colors, speeds } = useMemo(() => generateHeartParticles(COUNT), [])
-  const starPositions = useMemo(() => generateStars(STAR_COUNT), [])
-  // Current working positions (start from rest)
+  const { positions: starPositions, colors: starColors } = useMemo(() => generateStars(STAR_COUNT), [])
   const currentPos = useMemo(() => new Float32Array(restPositions), [restPositions])
+  const starSizes = useMemo(() => {
+    const arr = new Float32Array(STAR_COUNT)
+    for (let i = 0; i < STAR_COUNT; i++) arr[i] = 0.008 + Math.random() * 0.02
+    return arr
+  }, [])
 
   const sizes = useMemo(() => {
     const arr = new Float32Array(COUNT)
@@ -162,24 +166,19 @@ export default function ParticleSystem({ gestureData }) {
 
   return (
     <group>
-      {/* Background stars */}
+      {/* Background stars - colorful */}
       <points ref={starsRef}>
         <bufferGeometry>
-          <bufferAttribute
-            attach="attributes-position"
-            count={STAR_COUNT}
-            array={starPositions}
-            itemSize={3}
-          />
+          <bufferAttribute attach="attributes-position" count={STAR_COUNT} array={starPositions} itemSize={3} />
+          <bufferAttribute attach="attributes-color" count={STAR_COUNT} array={starColors} itemSize={3} />
+          <bufferAttribute attach="attributes-size" count={STAR_COUNT} array={starSizes} itemSize={1} />
         </bufferGeometry>
-        <pointsMaterial
-          size={0.02}
-          sizeAttenuation
+        <shaderMaterial
+          vertexShader={vertexShader}
+          fragmentShader={fragmentShader}
+          transparent
           depthWrite={false}
           blending={THREE.AdditiveBlending}
-          transparent
-          opacity={0.4}
-          color="#ffe0ec"
         />
       </points>
 

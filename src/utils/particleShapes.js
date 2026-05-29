@@ -5,12 +5,10 @@ function heartParametric(t, scale = 1) {
 }
 
 export const generateHeartParticles = (count = 25000) => {
-  // restPositions: the tight heart shape
-  // explodeOffsets: radial push outward for each particle
   const restPositions = new Float32Array(count * 3)
   const explodeOffsets = new Float32Array(count * 3)
   const colors = new Float32Array(count * 3)
-  const speeds = new Float32Array(count) // per-particle lerp speed
+  const speeds = new Float32Array(count)
 
   for (let i = 0; i < count; i++) {
     const i3 = i * 3
@@ -29,27 +27,59 @@ export const generateHeartParticles = (count = 25000) => {
     restPositions[i3 + 1] = ry
     restPositions[i3 + 2] = rz
 
-    // Explode offset: push radially outward
-    const dist = Math.sqrt(rx * rx + ry * ry + rz * rz) + 0.001
-    const strength = 0.8 + Math.random() * 3.2 // varied push amounts
-    explodeOffsets[i3]     = (rx / dist) * strength
-    explodeOffsets[i3 + 1] = (ry / dist) * strength
-    explodeOffsets[i3 + 2] = (rz / dist) * strength
+    // Distance from center — used to determine color zone
+    const dist = Math.sqrt(rx * rx + ry * ry + rz * rz)
 
-    // Per-particle response speed: some slow (0.3), some fast (1.0)
+    // Explode offset: push radially outward
+    const strength = 0.8 + Math.random() * 3.2
+    explodeOffsets[i3]     = (rx / (dist + 0.001)) * strength
+    explodeOffsets[i3 + 1] = (ry / (dist + 0.001)) * strength
+    explodeOffsets[i3 + 2] = (rz / (dist + 0.001)) * strength
+
     speeds[i] = 0.3 + Math.random() * 0.7
 
-    // Pink → red → purple gradient
-    const r = Math.random()
-    if (r < 0.35) {
-      colors[i3] = 1.0; colors[i3 + 1] = 0.08 + Math.random() * 0.18; colors[i3 + 2] = 0.4 + Math.random() * 0.3
-    } else if (r < 0.65) {
-      colors[i3] = 0.82 + Math.random() * 0.18; colors[i3 + 1] = 0.02 + Math.random() * 0.06; colors[i3 + 2] = 0.08 + Math.random() * 0.14
-    } else if (r < 0.85) {
-      colors[i3] = 0.6 + Math.random() * 0.3; colors[i3 + 1] = 0.04 + Math.random() * 0.08; colors[i3 + 2] = 0.6 + Math.random() * 0.4
+    // ── Multi-color palette: pink/red core + blue/cyan edge + gold accents ──
+    const rand = Math.random()
+    const edgeFactor = Math.min(dist / 4.5, 1.0) // 0 = core, 1 = edge
+
+    let cr, cg, cb
+
+    if (rand < 0.30) {
+      // Hot pink / magenta (core)
+      cr = 0.95 + Math.random() * 0.05
+      cg = 0.06 + Math.random() * 0.2
+      cb = 0.35 + Math.random() * 0.35
+    } else if (rand < 0.52) {
+      // Deep red / rose
+      cr = 0.78 + Math.random() * 0.22
+      cg = 0.02 + Math.random() * 0.08
+      cb = 0.05 + Math.random() * 0.2
+    } else if (rand < 0.70) {
+      // Cyan / electric blue (edge accent)
+      cr = 0.05 + Math.random() * 0.2
+      cg = 0.6 + Math.random() * 0.35
+      cb = 0.8 + Math.random() * 0.2
+    } else if (rand < 0.84) {
+      // Purple / violet
+      cr = 0.5 + Math.random() * 0.3
+      cg = 0.05 + Math.random() * 0.15
+      cb = 0.6 + Math.random() * 0.4
+    } else if (rand < 0.93) {
+      // Gold / amber spark (accent)
+      cr = 0.9 + Math.random() * 0.1
+      cg = 0.55 + Math.random() * 0.3
+      cb = 0.05 + Math.random() * 0.15
     } else {
-      colors[i3] = 0.9 + Math.random() * 0.1; colors[i3 + 1] = 0.55 + Math.random() * 0.3; colors[i3 + 2] = 0.65 + Math.random() * 0.3
+      // Soft white / blush
+      cr = 0.85 + Math.random() * 0.15
+      cg = 0.55 + Math.random() * 0.35
+      cb = 0.6 + Math.random() * 0.35
     }
+
+    // Slightly boost blue on edges, pink in core
+    colors[i3]     = cr
+    colors[i3 + 1] = cg
+    colors[i3 + 2] = cb
   }
 
   return { restPositions, explodeOffsets, colors, speeds }
@@ -57,6 +87,8 @@ export const generateHeartParticles = (count = 25000) => {
 
 export const generateStars = (count = 2000) => {
   const positions = new Float32Array(count * 3)
+  const colors = new Float32Array(count * 3)
+
   for (let i = 0; i < count; i++) {
     const i3 = i * 3
     const theta = Math.random() * Math.PI * 2
@@ -65,6 +97,19 @@ export const generateStars = (count = 2000) => {
     positions[i3]     = rad * Math.sin(phi) * Math.cos(theta)
     positions[i3 + 1] = rad * Math.sin(phi) * Math.sin(theta)
     positions[i3 + 2] = rad * Math.cos(phi)
+
+    // Colorful stars: blues, cyans, purples, pinks
+    const r = Math.random()
+    if (r < 0.3) {
+      colors[i3] = 0.2 + Math.random() * 0.3; colors[i3 + 1] = 0.5 + Math.random() * 0.4; colors[i3 + 2] = 0.7 + Math.random() * 0.3
+    } else if (r < 0.55) {
+      colors[i3] = 0.6 + Math.random() * 0.4; colors[i3 + 1] = 0.3 + Math.random() * 0.4; colors[i3 + 2] = 0.6 + Math.random() * 0.4
+    } else if (r < 0.75) {
+      colors[i3] = 0.7 + Math.random() * 0.3; colors[i3 + 1] = 0.2 + Math.random() * 0.3; colors[i3 + 2] = 0.3 + Math.random() * 0.3
+    } else {
+      colors[i3] = 0.5 + Math.random() * 0.5; colors[i3 + 1] = 0.5 + Math.random() * 0.5; colors[i3 + 2] = 0.5 + Math.random() * 0.5
+    }
   }
-  return positions
+
+  return { positions, colors }
 }

@@ -5,9 +5,10 @@
   overflow: hidden;
 }
 
+/* ── Title ── */
 .title-area {
   position: absolute;
-  top: clamp(24px, 6vh, 48px);
+  top: clamp(16px, 4vh, 40px);
   left: 50%;
   transform: translateX(-50%);
   z-index: 10;
@@ -15,47 +16,162 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 6px;
+  gap: 4px;
 }
 
 .main-title {
   font-family: 'Dancing Script', cursive;
-  font-size: clamp(32px, 7vw, 56px);
+  font-size: clamp(28px, 6vw, 52px);
   font-weight: 700;
   color: rgba(255, 255, 255, 0.92);
-  text-shadow: 0 0 40px rgba(255, 45, 110, 0.5), 0 0 80px rgba(200, 50, 100, 0.25);
+  text-shadow: 0 0 30px rgba(255, 45, 110, 0.5), 0 0 60px rgba(100, 150, 255, 0.25);
   margin: 0;
   letter-spacing: 0.04em;
 }
 
 .subtitle {
   font-family: 'Noto Sans SC', sans-serif;
-  font-size: clamp(12px, 2.5vw, 15px);
-  color: rgba(255, 255, 255, 0.45);
-  letter-spacing: 0.15em;
+  font-size: clamp(11px, 2.2vw, 14px);
+  color: rgba(255, 255, 255, 0.4);
+  letter-spacing: 0.12em;
 }
 
-.gesture-hints {
+/* ── Camera status ── */
+.camera-hint {
   position: absolute;
-  bottom: clamp(20px, 4vh, 36px);
+  top: clamp(90px, 16vh, 120px);
   left: 50%;
   transform: translateX(-50%);
   z-index: 10;
   pointer-events: none;
   display: flex;
-  gap: clamp(8px, 2vw, 16px);
-  color: rgba(255, 255, 255, 0.35);
-  font-size: clamp(10px, 2vw, 13px);
+  align-items: center;
+  gap: 8px;
+  color: rgba(255, 255, 255, 0.45);
+  font-size: clamp(11px, 2vw, 13px);
   font-family: 'Noto Sans SC', sans-serif;
+  animation: pulse 2s ease-in-out infinite;
+}
+
+.camera-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: rgba(255, 100, 150, 0.7);
+  box-shadow: 0 0 8px rgba(255, 45, 110, 0.5);
+}
+
+/* ── Gesture feedback ── */
+.gesture-feedback {
+  position: absolute;
+  top: 35%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 15;
+  pointer-events: none;
+  font-family: 'Dancing Script', 'Noto Sans SC', cursive;
+  font-size: clamp(28px, 7vw, 48px);
+  font-weight: 700;
+  color: #ff6b9d;
+  text-shadow: 0 0 30px rgba(255, 45, 110, 0.7), 0 0 60px rgba(100, 150, 255, 0.4);
+  animation: feedbackPop 1.5s ease-out forwards;
+}
+
+.gesture-feedback.big {
+  font-size: clamp(34px, 9vw, 56px);
+  color: #ff8aaf;
+}
+
+@keyframes feedbackPop {
+  0% { opacity: 0; transform: translate(-50%, -50%) scale(0.5); }
+  20% { opacity: 1; transform: translate(-50%, -50%) scale(1.15); }
+  100% { opacity: 0; transform: translate(-50%, -50%) scale(1); }
+}
+
+/* ── Gesture guide cards (mobile) ── */
+.gesture-guide {
+  position: absolute;
+  bottom: clamp(60px, 12vh, 90px);
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 10;
+  pointer-events: none;
+  display: flex;
+  gap: clamp(6px, 2vw, 14px);
+  transition: opacity 0.6s ease, transform 0.6s ease;
+  opacity: 0;
+  transform: translateX(-50%) translateY(15px);
+}
+
+.gesture-guide.visible {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
+}
+
+.guide-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  background: rgba(20, 5, 15, 0.6);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 14px;
+  padding: clamp(8px, 2vw, 12px) clamp(8px, 2vw, 14px);
+  min-width: clamp(70px, 18vw, 100px);
+  animation: cardFloat 3s ease-in-out infinite;
+}
+
+.guide-card:nth-child(2) { animation-delay: 0.3s; }
+.guide-card:nth-child(3) { animation-delay: 0.6s; }
+
+@keyframes cardFloat {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-6px); }
+}
+
+.guide-icon {
+  font-size: clamp(22px, 5vw, 30px);
+  line-height: 1;
+}
+
+.guide-label {
+  font-family: 'Noto Sans SC', sans-serif;
+  font-size: clamp(9px, 1.8vw, 11px);
+  color: rgba(255, 255, 255, 0.7);
   white-space: nowrap;
-  letter-spacing: 0.05em;
+  letter-spacing: 0.04em;
 }
 
-.hint-divider {
-  opacity: 0.25;
+.guide-effect {
+  font-family: 'Noto Sans SC', sans-serif;
+  font-size: clamp(8px, 1.5vw, 10px);
+  color: rgba(255, 150, 200, 0.6);
+  white-space: nowrap;
 }
 
-/* canvas fills screen */
+/* ── Bottom hint ── */
+.gesture-hints {
+  position: absolute;
+  bottom: clamp(10px, 2vh, 20px);
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 10;
+  pointer-events: none;
+  color: rgba(255, 255, 255, 0.25);
+  font-size: clamp(10px, 1.8vw, 12px);
+  font-family: 'Noto Sans SC', sans-serif;
+  letter-spacing: 0.06em;
+}
+
+/* ── Canvas ── */
 canvas {
   display: block;
+}
+
+/* ── Pulse ── */
+@keyframes pulse {
+  0%, 100% { opacity: 0.35; }
+  50% { opacity: 0.7; }
 }
