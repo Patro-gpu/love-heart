@@ -11,7 +11,7 @@ const vertexShader = /* glsl */ `
   void main() {
     vColor = color;
     vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
-    gl_PointSize = size * (300.0 / -mvPosition.z);
+    gl_PointSize = size * (280.0 / -mvPosition.z);
     gl_Position = projectionMatrix * mvPosition;
   }
 `
@@ -22,102 +22,141 @@ const fragmentShader = /* glsl */ `
   void main() {
     float dist = length(gl_PointCoord - 0.5);
     if (dist > 0.5) discard;
-    float alpha = 1.0 - smoothstep(0.28, 0.5, dist);
+    float alpha = 1.0 - smoothstep(0.25, 0.5, dist);
     gl_FragColor = vec4(vColor, alpha);
   }
 `
 
-const COUNT = 10000
-const STAR_COUNT = 1500
+const COUNT = 25000
+const STAR_COUNT = 2000
 
 export default function ParticleSystem({ gestureData }) {
   const pointsRef = useRef()
   const starsRef = useRef()
+  const burstPhase = useRef(0) // 0=idle, >0=bursting
 
-  const { positions, colors } = useMemo(() => generateHeartParticles(COUNT), [])
+  const { restPositions, explodeOffsets, colors, speeds } = useMemo(() => generateHeartParticles(COUNT), [])
   const starPositions = useMemo(() => generateStars(STAR_COUNT), [])
+  // Current working positions (start from rest)
+  const currentPos = useMemo(() => new Float32Array(restPositions), [restPositions])
 
   const sizes = useMemo(() => {
     const arr = new Float32Array(COUNT)
-    for (let i = 0; i < COUNT; i++) arr[i] = 0.04 + Math.random() * 0.06
+    for (let i = 0; i < COUNT; i++) arr[i] = 0.025 + Math.random() * 0.045
     return arr
   }, [])
 
   useFrame((state, delta) => {
     if (!pointsRef.current) return
 
-    const { tension, isClosed, fingerHeart, twoHandHeart, velocity } = gestureData
+    const { tension, isClosed, fingerHeart, twoHandHeart, velocity, rotation } = gestureData
     const posArr = pointsRef.current.geometry.attributes.position.array
     const sizeArr = pointsRef.current.geometry.attributes.size.array
     const time = state.clock.elapsedTime
+    const dt = Math.min(delta, 0.1)
 
     // ── Heartbeat ──
     const beat = Math.sin(time * Math.PI * 2 * 1.2)
-    const beatSharp = Math.pow(Math.abs(beat), 0.3) * Math.sign(beat)
-    const heartbeat = 1 + beatSharp * 0.06
+    const beatSharp = Math.pow(Math.abs(beat), 0.25) * Math.sign(beat)
+    const heartbeat = 1 + beatSharp * 0.05
 
-    // ── Gesture scaling ──
-    // tension 0→closed fist, tension 1→fully open hand
-    // Map: closed=0.2x, resting=1x, full-open=2.5x
-    const gestureScale = isClosed
-      ? 0.18
-      : 1.0 + tension * 1.8
-
-    // Special gestures boost
-    const specialBoost = fingerHeart || twoHandHeart
-      ? 1.5 + Math.sin(time * 10) * 0.3
-      : 1.0
-
-    const finalScale = gestureScale * heartbeat * specialBoost
-
-    // ── Rotation ──
-    const hasHand = tension > 0.05
-    if (hasHand && gestureData.rotation) {
-      const s = 4.0 * delta
-      pointsRef.current.rotation.x = THREE.MathUtils.lerp(pointsRef.current.rotation.x, gestureData.rotation.x * 0.6, s)
-      pointsRef.current.rotation.y = THREE.MathUtils.lerp(pointsRef.current.rotation.y, gestureData.rotation.y, s)
+    // ── Burst state machine ──
+    const wasBursting = burstPhase.current > 0
+    if (fingerHeart || twoHandHeart) {
+      burstPhase.current = Math.min(burstPhase.current + dt * 3, 1.5)
     } else {
-      // Auto-rotate when no hand
-      pointsRef.current.rotation.y += delta * 0.2
-      pointsRef.current.rotation.x += delta * 0.03
+      burstPhase.current = Math.max(burstPhase.current - dt * 2, 0)
     }
 
-    // ── Apply to each particle ──
-    const lerpSpeed = 4.0 * delta
-    // Velocity-based extra jitter
-    const jitterAmp = velocity * 0.08 * tension
+    // ── Shape morph: 0=rest heart, 1=fully exploded ──
+    // tension drives the explosion: open hand = particles spread out
+    const morph = isClosed
+      ? -0.4 // closed fist = tighter than rest
+      : tension * 1.0 // open hand = explode outward
+
+    // Burst adds extra explosion
+    const burst = burstPhase.current
+    const burstExplode = Math.sin(burst * Math.PI) * 2.5 // pulse up then down
+
+    // ── Hand "magnet" effect ──
+    // Hand position in 3D space (rough mapping from normalized coords)
+    const hasHand = tension > 0.03
+    const handX = hasHand ? (rotation?.y || 0) / (Math.PI * 2.5) : 0 // -1..1
+    const handY = hasHand ? (rotation?.x || 0) / (Math.PI * 1.2) : 0
+    // Hand acts as a "pull" point offset from center
+    const magnetX = handX * 3.0
+    const magnetY = -handY * 2.5
+    const magnetZ = 0
+
+    // ── Rotation ──
+    if (hasHand && rotation) {
+      const s = 3.0 * dt
+      pointsRef.current.rotation.x = THREE.MathUtils.lerp(pointsRef.current.rotation.x, rotation.x * 0.5, s)
+      pointsRef.current.rotation.y = THREE.MathUtils.lerp(pointsRef.current.rotation.y, rotation.y, s)
+    } else {
+      pointsRef.current.rotation.y += dt * 0.15
+      pointsRef.current.rotation.x += dt * 0.02
+    }
+
+    // ── Per-particle update ──
+    const windStrength = velocity * 2.5 * tension
+    const magnetStrength = tension * 0.7
 
     for (let i = 0; i < COUNT; i++) {
       const i3 = i * 3
 
-      const tx = positions[i3] * finalScale
-      const ty = positions[i3 + 1] * finalScale
-      const tz = positions[i3 + 2] * finalScale
+      // Rest heart position
+      const rx = restPositions[i3]
+      const ry = restPositions[i3 + 1]
+      const rz = restPositions[i3 + 2]
 
-      // Jitter from hand velocity
-      const jx = Math.sin(time * 10 + i * 0.07) * jitterAmp
-      const jy = Math.cos(time * 12 + i * 0.05) * jitterAmp
-      const jz = Math.sin(time * 9 + i * 0.06) * jitterAmp * 0.5
+      // Exploded = rest + radial push
+      const ex = rx + explodeOffsets[i3] * (morph + burstExplode)
+      const ey = ry + explodeOffsets[i3 + 1] * (morph + burstExplode)
+      const ez = rz + explodeOffsets[i3 + 2] * (morph + burstExplode)
 
-      posArr[i3]     += (tx + jx - posArr[i3]) * lerpSpeed
-      posArr[i3 + 1] += (ty + jy - posArr[i3 + 1]) * lerpSpeed
-      posArr[i3 + 2] += (tz + jz - posArr[i3 + 2]) * lerpSpeed
+      // Magnet: particles near hand position get pulled
+      const dx = ex - magnetX
+      const dy = ey - magnetY
+      const dz = ez - magnetZ
+      const distToHand = Math.sqrt(dx * dx + dy * dy + dz * dz) + 0.05
+      const magnetForce = magnetStrength / (distToHand * distToHand)
+      const mx = ex - dx * magnetForce * 0.5
+      const my = ey - dy * magnetForce * 0.5
+      const mz = ez - dz * magnetForce * 0.5
 
-      // Per-particle sparkle
-      const sparkle = 0.6 + 0.4 * Math.abs(Math.sin(time * 5 + i * 0.13))
-      const specialSize = (fingerHeart || twoHandHeart) ? 3.0 : 1.0
+      // Wind: hand velocity pushes particles in a swirl pattern
+      const swirlX = Math.sin(time * 3 + i * 0.04) * windStrength * 0.15
+      const swirlY = Math.cos(time * 3.5 + i * 0.03) * windStrength * 0.15
+      const swirlZ = Math.sin(time * 2.5 + i * 0.05) * windStrength * 0.1
+
+      const tx = mx + swirlX
+      const ty = my + swirlY
+      const tz = mz + swirlZ
+
+      // Per-particle lerp speed (organic async response)
+      const spd = speeds[i] * (5.0 + tension * 3.0 + burst * 8.0)
+      const lerp = spd * dt
+
+      posArr[i3]     += (tx - posArr[i3]) * lerp
+      posArr[i3 + 1] += (ty - posArr[i3 + 1]) * lerp
+      posArr[i3 + 2] += (tz - posArr[i3 + 2]) * lerp
+
+      // Size: sparkle + burst boost
+      const sparkle = 0.5 + 0.5 * Math.abs(Math.sin(time * 4.5 + i * 0.11))
+      const burstSize = 1 + burst * 4.0 * (1 - Math.abs(burst - 0.75) * 1.3)
       sizeArr[i] = isClosed
-        ? 0.008
-        : sizes[i] * sparkle * (0.7 + tension * 0.6) * specialSize
+        ? 0.006
+        : sizes[i] * sparkle * (0.6 + tension * 0.7) * heartbeat * burstSize
     }
 
     pointsRef.current.geometry.attributes.position.needsUpdate = true
     pointsRef.current.geometry.attributes.size.needsUpdate = true
 
-    // ── Stars slowly rotate ──
+    // Stars
     if (starsRef.current) {
-      starsRef.current.rotation.y += delta * 0.015
-      starsRef.current.rotation.x += delta * 0.003
+      starsRef.current.rotation.y += dt * 0.015
+      starsRef.current.rotation.x += dt * 0.003
     }
   })
 
@@ -134,12 +173,12 @@ export default function ParticleSystem({ gestureData }) {
           />
         </bufferGeometry>
         <pointsMaterial
-          size={0.025}
+          size={0.02}
           sizeAttenuation
           depthWrite={false}
           blending={THREE.AdditiveBlending}
           transparent
-          opacity={0.45}
+          opacity={0.4}
           color="#ffe0ec"
         />
       </points>
@@ -147,7 +186,7 @@ export default function ParticleSystem({ gestureData }) {
       {/* Heart particles */}
       <points ref={pointsRef}>
         <bufferGeometry>
-          <bufferAttribute attach="attributes-position" count={COUNT} array={positions} itemSize={3} />
+          <bufferAttribute attach="attributes-position" count={COUNT} array={currentPos} itemSize={3} />
           <bufferAttribute attach="attributes-color" count={COUNT} array={colors} itemSize={3} />
           <bufferAttribute attach="attributes-size" count={COUNT} array={sizes} itemSize={1} />
         </bufferGeometry>
