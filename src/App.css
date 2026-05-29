@@ -5,6 +5,109 @@
   overflow: hidden;
 }
 
+/* ── Tap to Start Overlay ── */
+.start-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: radial-gradient(ellipse at center, rgba(10,2,15,0.92) 0%, rgba(0,0,0,0.97) 100%);
+  backdrop-filter: blur(4px);
+}
+
+.start-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding: 32px 40px;
+  border-radius: 24px;
+  background: rgba(255, 50, 100, 0.06);
+  border: 1px solid rgba(255, 100, 150, 0.15);
+  cursor: pointer;
+  animation: cardPulse 2.5s ease-in-out infinite;
+  -webkit-tap-highlight-color: transparent;
+  user-select: none;
+}
+
+@keyframes cardPulse {
+  0%, 100% { box-shadow: 0 0 30px rgba(255, 45, 110, 0.1); }
+  50% { box-shadow: 0 0 60px rgba(255, 45, 110, 0.25), 0 0 100px rgba(100, 150, 255, 0.1); }
+}
+
+.start-heart {
+  font-size: 48px;
+  animation: float 2s ease-in-out infinite;
+}
+
+.start-title {
+  font-family: 'Dancing Script', cursive;
+  font-size: 32px;
+  color: rgba(255, 255, 255, 0.9);
+  margin: 0;
+  letter-spacing: 0.06em;
+}
+
+.start-desc {
+  font-family: 'Noto Sans SC', sans-serif;
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.4);
+  margin: 0;
+}
+
+.start-hints {
+  display: flex;
+  gap: 18px;
+  margin-top: 4px;
+  font-size: 22px;
+  opacity: 0.5;
+}
+
+/* ── Loading/Status Overlay ── */
+.status-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 40;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  background: rgba(0,0,0,0.8);
+  pointer-events: none;
+}
+
+.loading-spinner {
+  width: 32px;
+  height: 32px;
+  border: 2px solid rgba(255,255,255,0.1);
+  border-top-color: #ff6b9d;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.status-text {
+  font-family: 'Noto Sans SC', sans-serif;
+  font-size: 14px;
+  color: rgba(255, 255, 255, 0.6);
+}
+
+.status-text.error {
+  color: rgba(255, 150, 150, 0.7);
+}
+
+.status-sub {
+  font-family: 'Noto Sans SC', sans-serif;
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.3);
+}
+
 /* ── Title ── */
 .title-area {
   position: absolute;
@@ -13,10 +116,6 @@
   transform: translateX(-50%);
   z-index: 10;
   pointer-events: none;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 4px;
 }
 
 .main-title {
@@ -26,152 +125,144 @@
   color: rgba(255, 255, 255, 0.92);
   text-shadow: 0 0 30px rgba(255, 45, 110, 0.5), 0 0 60px rgba(100, 150, 255, 0.25);
   margin: 0;
-  letter-spacing: 0.04em;
 }
 
-.subtitle {
-  font-family: 'Noto Sans SC', sans-serif;
-  font-size: clamp(11px, 2.2vw, 14px);
-  color: rgba(255, 255, 255, 0.4);
-  letter-spacing: 0.12em;
-}
-
-/* ── Camera status ── */
-.camera-hint {
+/* ── Romantic message ── */
+.love-message {
   position: absolute;
-  top: clamp(90px, 16vh, 120px);
+  top: clamp(70px, 13vh, 100px);
   left: 50%;
-  transform: translateX(-50%);
+  transform: translate(-50%, 0);
   z-index: 10;
   pointer-events: none;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  color: rgba(255, 255, 255, 0.45);
-  font-size: clamp(11px, 2vw, 13px);
-  font-family: 'Noto Sans SC', sans-serif;
-  animation: pulse 2s ease-in-out infinite;
+  transition: opacity 0.7s ease, transform 0.7s ease;
+  opacity: 0;
+  transform: translate(-50%, 8px);
 }
 
-.camera-dot {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: rgba(255, 100, 150, 0.7);
-  box-shadow: 0 0 8px rgba(255, 45, 110, 0.5);
+.love-message.visible {
+  opacity: 1;
+  transform: translate(-50%, 0);
+}
+
+.message-text {
+  font-family: 'Dancing Script', 'Noto Sans SC', cursive;
+  font-size: clamp(20px, 4vw, 32px);
+  font-weight: 600;
+  background: linear-gradient(135deg, #ff6b9d, #c94b7c, #ff2d6e, #ff8aaf, #88bbff);
+  background-size: 300% 300%;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  animation: shimmer 3s linear infinite;
+  filter: drop-shadow(0 0 15px rgba(255, 45, 110, 0.4));
+}
+
+@keyframes shimmer {
+  0% { background-position: 0% center; }
+  100% { background-position: 300% center; }
 }
 
 /* ── Gesture feedback ── */
 .gesture-feedback {
   position: absolute;
-  top: 35%;
+  top: 40%;
   left: 50%;
   transform: translate(-50%, -50%);
   z-index: 15;
   pointer-events: none;
-  font-family: 'Dancing Script', 'Noto Sans SC', cursive;
-  font-size: clamp(28px, 7vw, 48px);
+  font-family: 'Dancing Script', cursive;
+  font-size: 36px;
   font-weight: 700;
   color: #ff6b9d;
-  text-shadow: 0 0 30px rgba(255, 45, 110, 0.7), 0 0 60px rgba(100, 150, 255, 0.4);
-  animation: feedbackPop 1.5s ease-out forwards;
+  text-shadow: 0 0 30px rgba(255, 45, 110, 0.7), 0 0 60px rgba(100, 200, 255, 0.3);
+  animation: feedbackPop 1.8s ease-out forwards;
 }
 
 .gesture-feedback.big {
-  font-size: clamp(34px, 9vw, 56px);
+  font-size: 44px;
   color: #ff8aaf;
 }
 
 @keyframes feedbackPop {
-  0% { opacity: 0; transform: translate(-50%, -50%) scale(0.5); }
-  20% { opacity: 1; transform: translate(-50%, -50%) scale(1.15); }
+  0% { opacity: 0; transform: translate(-50%, -50%) scale(0.4); }
+  15% { opacity: 1; transform: translate(-50%, -50%) scale(1.2); }
   100% { opacity: 0; transform: translate(-50%, -50%) scale(1); }
 }
 
-/* ── Gesture guide cards (mobile) ── */
+/* ── Gesture guide ── */
 .gesture-guide {
   position: absolute;
-  bottom: clamp(60px, 12vh, 90px);
+  bottom: clamp(55px, 11vh, 80px);
   left: 50%;
-  transform: translateX(-50%);
+  transform: translate(-50%, 10px);
   z-index: 10;
   pointer-events: none;
   display: flex;
-  gap: clamp(6px, 2vw, 14px);
-  transition: opacity 0.6s ease, transform 0.6s ease;
+  gap: clamp(6px, 2vw, 12px);
+  transition: opacity 0.5s ease, transform 0.5s ease;
   opacity: 0;
-  transform: translateX(-50%) translateY(15px);
 }
 
 .gesture-guide.visible {
   opacity: 1;
-  transform: translateX(-50%) translateY(0);
+  transform: translate(-50%, 0);
 }
 
 .guide-card {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 4px;
-  background: rgba(20, 5, 15, 0.6);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 14px;
-  padding: clamp(8px, 2vw, 12px) clamp(8px, 2vw, 14px);
-  min-width: clamp(70px, 18vw, 100px);
+  gap: 2px;
+  background: rgba(20, 5, 15, 0.55);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  border-radius: 12px;
+  padding: 8px 10px;
+  min-width: 64px;
   animation: cardFloat 3s ease-in-out infinite;
 }
 
-.guide-card:nth-child(2) { animation-delay: 0.3s; }
-.guide-card:nth-child(3) { animation-delay: 0.6s; }
+.guide-card:nth-child(2) { animation-delay: 0.35s; }
+.guide-card:nth-child(3) { animation-delay: 0.7s; }
 
 @keyframes cardFloat {
   0%, 100% { transform: translateY(0); }
-  50% { transform: translateY(-6px); }
+  50% { transform: translateY(-5px); }
 }
 
 .guide-icon {
-  font-size: clamp(22px, 5vw, 30px);
+  font-size: 24px;
   line-height: 1;
 }
 
 .guide-label {
   font-family: 'Noto Sans SC', sans-serif;
-  font-size: clamp(9px, 1.8vw, 11px);
-  color: rgba(255, 255, 255, 0.7);
-  white-space: nowrap;
-  letter-spacing: 0.04em;
-}
-
-.guide-effect {
-  font-family: 'Noto Sans SC', sans-serif;
-  font-size: clamp(8px, 1.5vw, 10px);
-  color: rgba(255, 150, 200, 0.6);
+  font-size: 10px;
+  color: rgba(255, 255, 255, 0.65);
   white-space: nowrap;
 }
 
 /* ── Bottom hint ── */
 .gesture-hints {
   position: absolute;
-  bottom: clamp(10px, 2vh, 20px);
+  bottom: clamp(8px, 1.5vh, 16px);
   left: 50%;
   transform: translateX(-50%);
   z-index: 10;
   pointer-events: none;
-  color: rgba(255, 255, 255, 0.25);
-  font-size: clamp(10px, 1.8vw, 12px);
+  color: rgba(255, 255, 255, 0.2);
+  font-size: clamp(9px, 1.6vw, 11px);
   font-family: 'Noto Sans SC', sans-serif;
-  letter-spacing: 0.06em;
 }
 
-/* ── Canvas ── */
+/* ── Animations ── */
+@keyframes float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-8px); }
+}
+
 canvas {
   display: block;
-}
-
-/* ── Pulse ── */
-@keyframes pulse {
-  0%, 100% { opacity: 0.35; }
-  50% { opacity: 0.7; }
 }
