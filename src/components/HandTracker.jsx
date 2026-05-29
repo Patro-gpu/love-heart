@@ -1,121 +1,135 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, useCallback } from 'react'
 import { FilesetResolver, HandLandmarker } from '@mediapipe/tasks-vision'
 
 export default function HandTracker({ onGestureUpdate }) {
   const videoRef = useRef(null)
-  const [isLoaded, setIsLoaded] = useState(false)
+  const [cameraReady, setCameraReady] = useState(false)
+  const prevWrist = useRef({ x: 0.5, y: 0.5 })
+
+  const processGestures = useCallback((landmarks, numHands) => {
+    const hand0 = landmarks[0]
+    const hand1 = landmarks.length > 1 ? landmarks[1] : null
+
+    // ── Tension: average fingertip-to-wrist distance ──
+    const wrist = hand0[0]
+    const tips = [4, 8, 12, 16, 20]
+    let totalDist = 0
+    for (const idx of tips) {
+      const t = hand0[idx]
+      totalDist += Math.sqrt((t.x - wrist.x) ** 2 + (t.y - wrist.y) ** 2 + (t.z - wrist.z) ** 2)
+    }
+    const raw = totalDist / 5
+    const tension = Math.min(Math.max((raw - 0.22) / 0.28, 0), 1)
+    const isClosed = tension < 0.12
+
+    // ── Hand velocity (for jitter effect) ──
+    const dx = wrist.x - prevWrist.current.x
+    const dy = wrist.y - prevWrist.current.y
+    const velocity = Math.sqrt(dx * dx + dy * dy) / 0.016 // per frame ~16ms
+    prevWrist.current = { x: wrist.x, y: wrist.y }
+
+    // ── Rotation from hand position ──
+    const rotation = {
+      y: (wrist.x - 0.5) * Math.PI * 2.5,
+      x: (wrist.y - 0.5) * Math.PI * 1.2,
+    }
+
+    // ── Finger heart: thumb tip near index tip ──
+    const thumbTip = hand0[4]
+    const indexTip = hand0[8]
+    const fingerDist = Math.sqrt((thumbTip.x - indexTip.x) ** 2 + (thumbTip.y - indexTip.y) ** 2)
+    const fingerHeart = fingerDist < 0.035
+
+    // ── Two-hand heart: thumbs close ──
+    let twoHandHeart = false
+    if (hand1) {
+      const h1Thumb = hand1[4]
+      const thumbDist = Math.sqrt((thumbTip.x - h1Thumb.x) ** 2 + (thumbTip.y - h1Thumb.y) ** 2)
+      twoHandHeart = thumbDist < 0.07
+    }
+
+    onGestureUpdate({ tension, isClosed, rotation, fingerHeart, twoHandHeart, velocity, handsDetected: numHands })
+  }, [onGestureUpdate])
 
   useEffect(() => {
     let handLandmarker = null
     let animationFrameId = null
+    let lastTime = 0
 
-    const setupMediaPipe = async () => {
-      const vision = await FilesetResolver.forVisionTasks(
-        "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.0/wasm"
-      )
-
-      handLandmarker = await HandLandmarker.createFromOptions(vision, {
-        baseOptions: {
-          modelAssetPath: "https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task",
-          delegate: "GPU"
-        },
-        runningMode: "VIDEO",
-        numHands: 2
-      })
-
-      setIsLoaded(true)
-      startWebcam()
-    }
-
-    const startWebcam = async () => {
-      if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
-        const stream = await navigator.mediaDevices.getUserMedia({
-          video: {
-            width: 1280,
-            height: 720
-          }
+    const init = async () => {
+      try {
+        const vision = await FilesetResolver.forVisionTasks(
+          'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.0/wasm'
+        )
+        handLandmarker = await HandLandmarker.createFromOptions(vision, {
+          baseOptions: {
+            modelAssetPath: 'https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task',
+            delegate: 'GPU'
+          },
+          runningMode: 'VIDEO',
+          numHands: 2,
         })
 
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: { width: 640, height: 480, facingMode: 'user' }
+        })
         if (videoRef.current) {
           videoRef.current.srcObject = stream
-          videoRef.current.addEventListener("loadeddata", predictWebcam)
-        }
-      }
-    }
-
-    const predictWebcam = () => {
-      if (videoRef.current && handLandmarker) {
-        let startTimeMs = performance.now()
-        const results = handLandmarker.detectForVideo(videoRef.current, startTimeMs)
-
-        if (results.landmarks && results.landmarks.length > 0) {
-          // Process landmarks for the first detected hand
-          const landmarks = results.landmarks[0]
-
-          // Calculate Tension: Average distance from palm (wrist) to fingertips
-          // Wrist is index 0. Fingertips are 4, 8, 12, 16, 20
-          const wrist = landmarks[0]
-          const fingertips = [4, 8, 12, 16, 20]
-
-          let totalDist = 0
-          fingertips.forEach(idx => {
-            const tip = landmarks[idx]
-            const dist = Math.sqrt(
-              Math.pow(tip.x - wrist.x, 2) +
-              Math.pow(tip.y - wrist.y, 2) +
-              Math.pow(tip.z - wrist.z, 2)
-            )
-            totalDist += dist
+          videoRef.current.addEventListener('loadeddata', () => {
+            setCameraReady(true)
+            lastTime = performance.now()
+            loop()
           })
-
-          // Normalize tension roughly (0.2 is closed, 0.5 is open)
-          // We map 0.2 -> 0 and 0.5 -> 1
-          const rawTension = totalDist / 5
-          const tension = Math.min(Math.max((rawTension - 0.2) / 0.3, 0), 1)
-
-          // Calculate Closing: Check if fingertips are close to palm base
-          // Simple heuristic: if tension is very low
-          const isClosed = tension < 0.2
-
-          // Calculate Rotation based on Hand Position in frame
-          // wrist.x and wrist.y are normalized [0, 1]
-          // Center is 0.5, 0.5
-          // Map x to Yaw (rotate around Y axis)
-          // Map y to Pitch (rotate around X axis)
-
-          // Sensitivity factor
-          const sensitivity = 1.5
-          const rotation = {
-            y: (wrist.x - 0.5) * sensitivity * Math.PI, // Yaw
-            x: 0 // Pitch restricted
-          }
-
-          onGestureUpdate({ tension, isClosed, rotation })
-        } else {
-          // No hand detected, reset to neutral
-          onGestureUpdate({ tension: 0.5, isClosed: false, rotation: { x: 0, y: 0 } })
         }
-
-        animationFrameId = requestAnimationFrame(predictWebcam)
+      } catch (err) {
+        console.warn('Camera unavailable:', err.message)
+        setCameraReady(true) // still render, auto-rotate
       }
     }
 
-    setupMediaPipe()
+    const loop = () => {
+      if (videoRef.current && handLandmarker) {
+        const now = performance.now()
+        // Run detection at ~30fps to save CPU
+        if (now - lastTime > 33) {
+          lastTime = now
+          const results = handLandmarker.detectForVideo(videoRef.current, now)
+          if (results.landmarks?.length > 0) {
+            processGestures(results.landmarks, results.landmarks.length)
+          } else {
+            prevWrist.current = { x: 0.5, y: 0.5 }
+            onGestureUpdate({ tension: 0, isClosed: false, rotation: { x: 0, y: 0 }, fingerHeart: false, twoHandHeart: false, velocity: 0, handsDetected: 0 })
+          }
+        }
+        animationFrameId = requestAnimationFrame(loop)
+      }
+    }
 
+    init()
     return () => {
       if (animationFrameId) cancelAnimationFrame(animationFrameId)
       if (handLandmarker) handLandmarker.close()
-      // Stop webcam stream
-      if (videoRef.current && videoRef.current.srcObject) {
-        videoRef.current.srcObject.getTracks().forEach(track => track.stop())
+      if (videoRef.current?.srcObject) {
+        videoRef.current.srcObject.getTracks().forEach(t => t.stop())
       }
     }
-  }, [onGestureUpdate])
+  }, [processGestures, onGestureUpdate])
 
   return (
-    <div style={{ position: 'absolute', top: 0, left: 0, opacity: 0.3, pointerEvents: 'none', zIndex: 10 }}>
-      {!isLoaded && <div style={{ color: 'white', padding: '10px' }}>Loading Hand Tracking...</div>}
-      <video ref={videoRef} style={{ width: '320px', height: 'auto', transform: 'scaleX(-1)' }} autoPlay playsInline muted />
-    </div>
+    <>
+      {!cameraReady && (
+        <div style={{
+          position: 'absolute', bottom: 80, left: '50%', transform: 'translateX(-50%)',
+          color: 'rgba(255,255,255,0.5)', fontSize: 13, zIndex: 20, fontFamily: '"Noto Sans SC", sans-serif'
+        }}>
+          正在启动摄像头...
+        </div>
+      )}
+      <video
+        ref={videoRef}
+        style={{ display: 'none' }}
+        autoPlay playsInline muted
+      />
+    </>
   )
 }

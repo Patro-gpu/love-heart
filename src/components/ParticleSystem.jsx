@@ -1,118 +1,164 @@
-import { useRef, useMemo, useEffect } from 'react'
+import { useRef, useMemo } from 'react'
 import { useFrame } from '@react-three/fiber'
 import * as THREE from 'three'
-import { generateParticles } from '../utils/particleShapes'
+import { generateHeartParticles, generateStars } from '../utils/particleShapes'
 
-export default function ParticleSystem({ gestureData, config }) {
+const vertexShader = /* glsl */ `
+  attribute float size;
+  attribute vec3 color;
+  varying vec3 vColor;
+
+  void main() {
+    vColor = color;
+    vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
+    gl_PointSize = size * (300.0 / -mvPosition.z);
+    gl_Position = projectionMatrix * mvPosition;
+  }
+`
+
+const fragmentShader = /* glsl */ `
+  varying vec3 vColor;
+
+  void main() {
+    float dist = length(gl_PointCoord - 0.5);
+    if (dist > 0.5) discard;
+    float alpha = 1.0 - smoothstep(0.28, 0.5, dist);
+    gl_FragColor = vec4(vColor, alpha);
+  }
+`
+
+const COUNT = 10000
+const STAR_COUNT = 1500
+
+export default function ParticleSystem({ gestureData }) {
   const pointsRef = useRef()
-  const count = 10000 // Number of particles
+  const starsRef = useRef()
 
-  // Generate initial positions based on template
-  const positions = useMemo(() => {
-    return generateParticles(config.template, count)
-  }, [config.template])
+  const { positions, colors } = useMemo(() => generateHeartParticles(COUNT), [])
+  const starPositions = useMemo(() => generateStars(STAR_COUNT), [])
 
-  // Create a buffer attribute for the positions
-  // We need two buffers: current positions and target positions to interpolate
-  const targetPositions = useMemo(() => new Float32Array(positions), [positions])
-  const currentPositions = useRef(new Float32Array(positions))
-
-  // Update geometry when template changes
-  useEffect(() => {
-    const newPositions = generateParticles(config.template, count)
-    targetPositions.set(newPositions)
-  }, [config.template, targetPositions])
+  const sizes = useMemo(() => {
+    const arr = new Float32Array(COUNT)
+    for (let i = 0; i < COUNT; i++) arr[i] = 0.04 + Math.random() * 0.06
+    return arr
+  }, [])
 
   useFrame((state, delta) => {
     if (!pointsRef.current) return
 
-    const { tension, isClosed } = gestureData
-    const positionsAttribute = pointsRef.current.geometry.attributes.position
-    const array = positionsAttribute.array
+    const { tension, isClosed, fingerHeart, twoHandHeart, velocity } = gestureData
+    const posArr = pointsRef.current.geometry.attributes.position.array
+    const sizeArr = pointsRef.current.geometry.attributes.size.array
+    const time = state.clock.elapsedTime
 
-    // Animation / Interaction Logic
-    // 1. Interpolate towards target shape
-    // 2. Apply tension (expansion)
-    // 3. Apply closing (contraction/implosion)
+    // ── Heartbeat ──
+    const beat = Math.sin(time * Math.PI * 2 * 1.2)
+    const beatSharp = Math.pow(Math.abs(beat), 0.3) * Math.sign(beat)
+    const heartbeat = 1 + beatSharp * 0.06
 
-    const lerpSpeed = 2.0 * delta
+    // ── Gesture scaling ──
+    // tension 0→closed fist, tension 1→fully open hand
+    // Map: closed=0.2x, resting=1x, full-open=2.5x
+    const gestureScale = isClosed
+      ? 0.18
+      : 1.0 + tension * 1.8
 
-    // Base scale based on tension
-    // Tension 0 -> Scale 1
-    // Tension 1 -> Scale 2 (Expansion)
-    const targetScale = 1 + tension * 1.5
+    // Special gestures boost
+    const specialBoost = fingerHeart || twoHandHeart
+      ? 1.5 + Math.sin(time * 10) * 0.3
+      : 1.0
 
-    // If closed, scale shrinks to 0.1
-    const finalScale = isClosed ? 0.1 : targetScale
+    const finalScale = gestureScale * heartbeat * specialBoost
 
-    // Apply Rotation from Gesture
-    if (gestureData.rotation) {
-      // Smooth rotation using lerp to reduce jitter
-      // Factor of 2.0 * delta gives a smooth weighted average
-      const smoothing = 2.0 * delta
-      pointsRef.current.rotation.x = THREE.MathUtils.lerp(pointsRef.current.rotation.x, gestureData.rotation.x, smoothing)
-      pointsRef.current.rotation.y = THREE.MathUtils.lerp(pointsRef.current.rotation.y, gestureData.rotation.y, smoothing)
+    // ── Rotation ──
+    const hasHand = tension > 0.05
+    if (hasHand && gestureData.rotation) {
+      const s = 4.0 * delta
+      pointsRef.current.rotation.x = THREE.MathUtils.lerp(pointsRef.current.rotation.x, gestureData.rotation.x * 0.6, s)
+      pointsRef.current.rotation.y = THREE.MathUtils.lerp(pointsRef.current.rotation.y, gestureData.rotation.y, s)
     } else {
-      pointsRef.current.rotation.y += delta * 0.1
+      // Auto-rotate when no hand
+      pointsRef.current.rotation.y += delta * 0.2
+      pointsRef.current.rotation.x += delta * 0.03
     }
 
-    for (let i = 0; i < count; i++) {
+    // ── Apply to each particle ──
+    const lerpSpeed = 4.0 * delta
+    // Velocity-based extra jitter
+    const jitterAmp = velocity * 0.08 * tension
+
+    for (let i = 0; i < COUNT; i++) {
       const i3 = i * 3
 
-      let tx = targetPositions[i3]
-      let ty = targetPositions[i3 + 1]
-      let tz = targetPositions[i3 + 2]
+      const tx = positions[i3] * finalScale
+      const ty = positions[i3 + 1] * finalScale
+      const tz = positions[i3 + 2] * finalScale
 
-      // Special Logic for F1 Road
-      if (config.template === 'f1' && ty <= -0.9 && ty >= -1.1) {
-        const speed = 20.0 * delta
-        array[i3 + 2] += speed
-        if (array[i3 + 2] > 10) array[i3 + 2] = -10
+      // Jitter from hand velocity
+      const jx = Math.sin(time * 10 + i * 0.07) * jitterAmp
+      const jy = Math.cos(time * 12 + i * 0.05) * jitterAmp
+      const jz = Math.sin(time * 9 + i * 0.06) * jitterAmp * 0.5
 
-        tx *= finalScale
-        ty *= finalScale
+      posArr[i3]     += (tx + jx - posArr[i3]) * lerpSpeed
+      posArr[i3 + 1] += (ty + jy - posArr[i3 + 1]) * lerpSpeed
+      posArr[i3 + 2] += (tz + jz - posArr[i3 + 2]) * lerpSpeed
 
-        array[i3] += (tx - array[i3]) * lerpSpeed
-        array[i3 + 1] += (ty - array[i3 + 1]) * lerpSpeed
-        continue
-      }
-
-      // Apply scale
-      tx *= finalScale
-      ty *= finalScale
-      tz *= finalScale
-
-      // Add some noise/movement based on time
-      const time = state.clock.elapsedTime
-      const noise = Math.sin(time + i) * 0.05 * tension // More jitter with tension
-
-      array[i3] += (tx - array[i3]) * lerpSpeed + noise
-      array[i3 + 1] += (ty - array[i3 + 1]) * lerpSpeed + noise
-      array[i3 + 2] += (tz - array[i3 + 2]) * lerpSpeed + noise
+      // Per-particle sparkle
+      const sparkle = 0.6 + 0.4 * Math.abs(Math.sin(time * 5 + i * 0.13))
+      const specialSize = (fingerHeart || twoHandHeart) ? 3.0 : 1.0
+      sizeArr[i] = isClosed
+        ? 0.008
+        : sizes[i] * sparkle * (0.7 + tension * 0.6) * specialSize
     }
 
-    positionsAttribute.needsUpdate = true
+    pointsRef.current.geometry.attributes.position.needsUpdate = true
+    pointsRef.current.geometry.attributes.size.needsUpdate = true
+
+    // ── Stars slowly rotate ──
+    if (starsRef.current) {
+      starsRef.current.rotation.y += delta * 0.015
+      starsRef.current.rotation.x += delta * 0.003
+    }
   })
 
   return (
-    <points ref={pointsRef}>
-      <bufferGeometry>
-        <bufferAttribute
-          attach="attributes-position"
-          count={count}
-          array={currentPositions.current}
-          itemSize={3}
+    <group>
+      {/* Background stars */}
+      <points ref={starsRef}>
+        <bufferGeometry>
+          <bufferAttribute
+            attach="attributes-position"
+            count={STAR_COUNT}
+            array={starPositions}
+            itemSize={3}
+          />
+        </bufferGeometry>
+        <pointsMaterial
+          size={0.025}
+          sizeAttenuation
+          depthWrite={false}
+          blending={THREE.AdditiveBlending}
+          transparent
+          opacity={0.45}
+          color="#ffe0ec"
         />
-      </bufferGeometry>
-      <pointsMaterial
-        size={0.05}
-        color={config.color}
-        sizeAttenuation={true}
-        depthWrite={false}
-        blending={THREE.AdditiveBlending}
-        transparent={true}
-        opacity={0.8}
-      />
-    </points>
+      </points>
+
+      {/* Heart particles */}
+      <points ref={pointsRef}>
+        <bufferGeometry>
+          <bufferAttribute attach="attributes-position" count={COUNT} array={positions} itemSize={3} />
+          <bufferAttribute attach="attributes-color" count={COUNT} array={colors} itemSize={3} />
+          <bufferAttribute attach="attributes-size" count={COUNT} array={sizes} itemSize={1} />
+        </bufferGeometry>
+        <shaderMaterial
+          vertexShader={vertexShader}
+          fragmentShader={fragmentShader}
+          transparent
+          depthWrite={false}
+          blending={THREE.AdditiveBlending}
+        />
+      </points>
+    </group>
   )
 }

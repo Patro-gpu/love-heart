@@ -1,42 +1,61 @@
-#root {
-  max-width: 1280px;
-  margin: 0 auto;
-  padding: 2rem;
-  text-align: center;
+.app-container {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
 }
 
-.logo {
-  height: 6em;
-  padding: 1.5em;
-  will-change: filter;
-  transition: filter 300ms;
-}
-.logo:hover {
-  filter: drop-shadow(0 0 2em #646cffaa);
-}
-.logo.react:hover {
-  filter: drop-shadow(0 0 2em #61dafbaa);
-}
-
-@keyframes logo-spin {
-  from {
-    transform: rotate(0deg);
-  }
-  to {
-    transform: rotate(360deg);
-  }
+.title-area {
+  position: absolute;
+  top: clamp(24px, 6vh, 48px);
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 10;
+  pointer-events: none;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
 }
 
-@media (prefers-reduced-motion: no-preference) {
-  a:nth-of-type(2) .logo {
-    animation: logo-spin infinite 20s linear;
-  }
+.main-title {
+  font-family: 'Dancing Script', cursive;
+  font-size: clamp(32px, 7vw, 56px);
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.92);
+  text-shadow: 0 0 40px rgba(255, 45, 110, 0.5), 0 0 80px rgba(200, 50, 100, 0.25);
+  margin: 0;
+  letter-spacing: 0.04em;
 }
 
-.card {
-  padding: 2em;
+.subtitle {
+  font-family: 'Noto Sans SC', sans-serif;
+  font-size: clamp(12px, 2.5vw, 15px);
+  color: rgba(255, 255, 255, 0.45);
+  letter-spacing: 0.15em;
 }
 
-.read-the-docs {
-  color: #888;
+.gesture-hints {
+  position: absolute;
+  bottom: clamp(20px, 4vh, 36px);
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 10;
+  pointer-events: none;
+  display: flex;
+  gap: clamp(8px, 2vw, 16px);
+  color: rgba(255, 255, 255, 0.35);
+  font-size: clamp(10px, 2vw, 13px);
+  font-family: 'Noto Sans SC', sans-serif;
+  white-space: nowrap;
+  letter-spacing: 0.05em;
+}
+
+.hint-divider {
+  opacity: 0.25;
+}
+
+/* canvas fills screen */
+canvas {
+  display: block;
 }
